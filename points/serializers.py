@@ -67,3 +67,9 @@ class MessageSerializer(serializers.ModelSerializer):
             'longitude': instance.point.longitude,
         }
         return representation
+
+
+class SearchSerializer(serializers.Serializer):
+    latitude = serializers.FloatField(required=True, min_value=-90, max_value=90)
+    longitude = serializers.FloatField(required=True, min_value=-180, max_value=180)
+    radius = serializers.IntegerField(required=True, min_value=0.1, max_value=1000, help_text="Radius in kilometers")
