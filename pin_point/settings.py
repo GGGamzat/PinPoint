@@ -70,7 +70,7 @@ DATABASES = {
         'ENGINE': 'django.contrib.gis.db.backends.postgis',
         'NAME': 'pin_point_db',
         'USER': 'postgres',
-        'PASSWORD': '0000',
+        'PASSWORD': 'postgres',
         'HOST': 'db',
         'PORT': '5432',
     }

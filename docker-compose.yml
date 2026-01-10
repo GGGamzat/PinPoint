@@ -2,16 +2,18 @@
 services:
   db:
     image: postgis/postgis:16-3.4
+    container_name: pin_point_db
     environment:
       POSTGRES_DB: pin_point_db
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 0000
+      POSTGRES_PASSWORD: postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
 
   web:
+    container_name: web
     build: .
     ports:
       - "8000:8000"
@@ -23,22 +25,9 @@ services:
       - .:/app
     command: >
       sh -c "
-        sleep 5 &&
-
-        python manage.py makemigrations &&
-
-        python manage.py migrate &&
-
-        python manage.py shell -c '
-          from django.contrib.auth import get_user_model;
-          User = get_user_model();
-          if not User.objects.filter(username=\"admin\").exists():
-              User.objects.create_superuser(\"admin\", \"admin@example.com\", \"admin123\");
-              print(\"✓ Суперпользователь создан: admin / admin123\");
-          else:
-              print(\"✓ Суперпользователь уже существует\");
-        ' &&
-
+        sleep 40 &&
+        python manage.py makemigrations --noinput &&
+        python manage.py migrate --noinput &&
         python manage.py runserver 0.0.0.0:8000
       "
 
