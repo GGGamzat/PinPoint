@@ -1,56 +1,105 @@
 from rest_framework import serializers
-from django.contrib.gis.geos import Point
-from django.contrib.auth.models import User
-from .models import Point, Message
+from django.contrib.auth import authenticate
+from django.contrib.gis.geos import Point as GeoPoint
+# from django.contrib.auth.models import User
+from .models import User
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
+from .models import Point, Message, AuthToken
 
 
-class UserSerializer(serializers.ModelSerializer):
+class RegisterSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(required=True, min_length=8, write_only=True, style={'input_type': 'password'})
+
+    def validate_email(self, value):
+        try:
+            validate_email(value)
+        except ValidationError:
+            raise serializers.ValidationError('Invalid email')
+
+        if User.objects.filter(email=value.lower()).exists():
+            raise serializers.ValidationError('Email already exists')
+
+        return value.lower()
+
+    def create(self, validated_data):
+        return User.objects.create_user(email=validated_data['email'], password=validated_data['password'])
+
+
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(required=True, write_only=True, style={'input_type': 'password'})
+
+    def validate(self, data):
+        email = data.pop('email', '').lower()
+        password = data.get('password', '')
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            raise serializers.ValidationError({'email': "User not found"})
+
+        if not user.check_password(password):
+            raise serializers.ValidationError({'password': 'Wrong password'})
+
+        user = authenticate(username=email, password=password)
+        if not user:
+            raise serializers.ValidationError('Authentication failed')
+
+        data['user'] = user
+        return data
+
+
+class TokenSerializer(serializers.ModelSerializer):
     class Meta:
-        model = User
-        fields = ['id', 'username', 'email']
+        model = AuthToken
+        fields = ['key', 'user']
 
 
 class PointSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
     latitude = serializers.FloatField(write_only=True, required=True)
     longitude = serializers.FloatField(write_only=True, required=True)
 
     class Meta:
         model = Point
-        fields = ['id', 'user', 'name', 'description', 'latitude', 'longitude', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+        fields = ['id', 'name', 'description', 'latitude', 'longitude', 'created_at']
+        read_only_fields = ['id', 'created_at']
 
     def create(self, validated_data):
         latitude = validated_data.pop('latitude')
         longitude = validated_data.pop('longitude')
-        location = Point(longitude, latitude, srid=4326)
+        location = GeoPoint(longitude, latitude, srid=4326)
         user = self.context['request'].user
+
+        if 'user' in validated_data:
+            validated_data.pop('user')
+
         point = Point.objects.create(user=user, location=location, **validated_data)
 
         return point
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
-        representation['latitude'] = representation['latitude']
-        representation['longitude'] = representation['longitude']
+        representation['latitude'] = instance.latitude
+        representation['longitude'] = instance.longitude
         return representation
 
 
 class MessageSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
     point_id = serializers.IntegerField(write_only=True)
 
     class Meta:
         model = Message
-        fields = ['id', 'user', 'point_id', 'text', 'created_at']
-        read_only_fields = ['id', 'user', 'created_at']
+        fields = ['id', 'point_id', 'text', 'created_at']
+        read_only_fields = ['id', 'created_at']
 
     def create(self, validated_data):
         point_id = validated_data.pop('point_id')
         user = self.context['request'].user
 
         try:
-            point = Point.objects.get(id=point_id)
+            point = Point.objects.get(id=point_id, user=user)
         except Point.DoesNotExist:
             raise serializers.ValidationError({'point_id': "Point not found"})
 

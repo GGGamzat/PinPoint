@@ -1,14 +1,57 @@
-from django.contrib.gis.geos import Point
+from django.contrib.gis.geos import Point as GeoPoint
 from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.measure import D
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 
 from .models import Point, Message
-from .serializers import PointSerializer, MessageSerializer, SearchSerializer
+from .serializers import RegisterSerializer, LoginSerializer, TokenSerializer, PointSerializer, MessageSerializer, SearchSerializer
+from .authentication import create_token
+
+
+class RegisterView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = serializer.save()
+        token = create_token(user)
+
+        return Response({
+            'token': TokenSerializer(token).data,
+            'user_id': user.id,
+            'email': user.email
+        }, status=status.HTTP_201_CREATED)
+
+
+class LoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = serializer.validated_data['user']
+        token = create_token(user)
+
+        return Response({
+            'token': TokenSerializer(token).data,
+            'user_id': user.id,
+            'email': user.email
+        })
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        request.auth.delete()
+        return Response({'message': 'Logged out'})
 
 
 class PointViewSet(viewsets.ModelViewSet):
@@ -29,7 +72,7 @@ class PointViewSet(viewsets.ModelViewSet):
 
         data = serializer.validated_data
 
-        search_point = Point(x=data['longitude'], y=data['latitude'], srid=4326)
+        search_point = GeoPoint(x=data['longitude'], y=data['latitude'], srid=4326)
 
         points = Point.objects.filter(
             location__distance_lte=(search_point, D(km=data['radius']))
@@ -66,11 +109,11 @@ class MessageViewSet(viewsets.ModelViewSet):
 
         data = serializer.validated_data
 
-        search_point = Point(x=data['longitude'], y=data['latitude'], srid=4326)
+        search_point = GeoPoint(x=data['longitude'], y=data['latitude'], srid=4326)
 
         messages = Message.objects.filter(
             point__location__distance_lte=(search_point, D(km=data['radius']))
-        ).annocate(
+        ).annotate(
             distance=Distance('point__location', search_point)
         ).select_related('point', 'user').order_by('-created_at')
 
