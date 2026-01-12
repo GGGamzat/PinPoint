@@ -201,7 +201,7 @@ class CoreFunctionalityTests(APITestCase):
         params_large = {
             'latitude': 55.7558,  # Москва
             'longitude': 37.6176,
-            'radius': 1000  # 1000 км
+            'radius': 1000
         }
 
         response_large = self.client.get(url, params_large)
@@ -209,7 +209,7 @@ class CoreFunctionalityTests(APITestCase):
         # Должно найти 2 сообщения
         self.assertEqual(response_large.data['count'], 2)
 
-        print(f"✔ При радиусе 3000 км найдено {response_large.data['count']} сообщений")
+        print(f"✔ При радиусе 1000 км найдено {response_large.data['count']} сообщений")
         return True
 
     def test_authorization_required(self):
